@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>workdodger</title>
+        <link href='https://fonts.googleapis.com/css?family=Audiowide' rel='stylesheet' type='text/css'>
+		<link href="game.css" rel="stylesheet">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script> 
+        <script src="phaser.min.js"></script>
+		<script src="boot.js"></script>
+		<script src="preload.js"></script>
+		<script src="gametitle.js"></script>
+		<script src="thegame.js"></script>
+		<script src="gameover.js"></script>
+
+    </head>
+    <body>
+	<div id="divGamePanel" >       
+
+	</div>
+        
+    <div id="divGameInfo" >
+    </div>
+
+
+    <script type="text/javascript">
+        
+    var game;
+    var saveGameToken;
+
+    window.onload = function() {
+	
+        var gameid = 1;
+		game = new Phaser.Game(800, 600, Phaser.AUTO, 'divGamePanel');
+		
+		game.state.add("Boot",boot);
+		game.state.add("Preload",preload);
+		game.state.add("GameTitle",gameTitle);
+		game.state.add("TheGame",theGame);
+		game.state.add("GameOver",gameOver);
+		game.state.start("Boot");
+        
+        // create anchor event bindings
+        $(document).on('click', 'a.hrefBack', function() {
+            displayGameStart();			
+        });
+        $(document).on('click', 'a.hrefHighScores', function() {
+            displayHighScores(gameid);			
+		});
+        $(document).on('click', 'a.hrefStart', function() {
+            $('#divGameInfo').css('zIndex', "-10");
+            game.state.start("TheGame");		
+		});
+        $(document).on('click', 'a.hrefSave', function() {
+            var enteredName = $('#txtName').val();
+            var highScore =  $('#tdScore').html();
+            var success = saveHighScore(enteredName, highScore);	
+            if(success){
+                displayGameStart();
+            }
+		});        
+		
+		displayGameStart();
+
+    };
+            
+    function displayGameStart(){
+        
+        var divHTML;       
+        var headerText = $("<h1></h1>").text("Workdodger");
+        var hrefStart  = $("<a href='#' class='hrefStart'></a>").text("Start");        
+        var hrefHighScores  = $("<a href='#' class='hrefHighScores'></a>").text("High Scores");      
+
+        $("#divGameInfo").empty();
+        $("#divGameInfo").append(headerText, hrefStart, hrefHighScores);
+        
+    }
+        
+    function displayGameOver(game, highScore){
+					
+		$.get("api/loadHighScores.php", { gameid: 1, score: highScore} , function( responseData ) {
+			var tableHTML;
+            var isHighScore = false;
+            var headerText = $("<h2></h2>").text("Game Over");
+            var subHeaderText = $("<h3></h3>").text("High Scores");                
+            tableHTML = '<table id="tblHighScores">';
+			
+            response = $.parseJSON(responseData);         
+            data = response.highscores;    
+            saveGameToken = response.highscoretoken;        
+            
+			if(data != null){
+			
+				for(var i = 0; i <= 10; i++){	
+                    
+                    if(i < data.length) {
+                        if(data[i].score >= highScore){
+                            tableHTML = tableHTML + '<tr><td class="tdName">' + data[i].name + '</td><td class="tdScore">' + data[i].score + '</td></tr>';
+
+                        } else {
+                            tableHTML = tableHTML + '<tr><td><input type="text" id="txtName" class="tdName" name="name" value=""/></td><td id="tdScore" class="tdScore">' + highScore + '</td></tr>';  
+                            subHeaderText.text("High Score! Enter your name");
+                            isHighScore = true;
+                        }	
+                    } else if (i == data.length && i < 10) {
+                        tableHTML = tableHTML + '<tr><td><input type="text" id="txtName" class="tdName" name="name" value=""/></td><td id="tdScore" class="tdScore">' + highScore + '</td></tr>'; 
+                        subHeaderText.text("High Score! Enter your name");
+                        isHighScore = true;
+                    } else {
+                         tableHTML = tableHTML + '<tr><td class="tdName"></td><td class="tdScore"></td></tr>';
+                    }
+				}	
+			}
+			tableHTML = tableHTML + '</table>';
+            
+            if(isHighScore){
+                var hrefStart  = $("<a href='#' class='hrefSave'></a>").text("Save");
+            } else {
+                var hrefStart  = $("<a href='#' class='hrefStart'></a>").text("Retry");
+            }
+            
+            divHTML = tableHTML + '<a href="#" id="hrefStart"> Back </a>';
+            
+            $("#divGameInfo").empty();
+			$("#divGameInfo").append(headerText, subHeaderText, tableHTML, hrefStart);
+			$("#divGameInfo").css('z-index', '10');
+		});
+    }
+        
+    function displayHighScores(game){
+            
+        $.get("api/loadHighScores.php", { gameid: 1, score: 0} , function( responseData ) {
+            
+            var tableHTML;            
+            var headerText = $("<h2></h2>").text("High Scores");
+            var hrefBack  = $("<a href='#' class='hrefBack'></a>").text("Back");            
+            tableHTML = '<table id="tblHighScores">' 
+            
+            response = $.parseJSON(responseData);         
+            data = response.highscores; 
+			
+            if(data != null){                
+
+                for(var i = 0; i < data.length; i++){
+                    tableHTML = tableHTML + '<tr><td>' + (i + 1) + '. </td><td class="tdName">' + data[i].name + '</td><td class="tdScore"> ' + data[i].score + ' Seconds</td></tr>';		
+                }	
+            }
+            
+            tableHTML = tableHTML + '</table>';          	
+            
+            $("#divGameInfo").empty();
+            $("#divGameInfo").append(headerText, tableHTML, hrefBack);
+            $("#divGameInfo").css('z-index', '10');         
+        });
+        
+	}
+        
+    function saveHighScore(name, score){
+        $.post( "api/saveHighScore.php", JSON.stringify({  gameid: 1, name: name, score: score, token: saveGameToken }))
+            .done(function( responseData ) {
+                data = $.parseJSON(responseData);      
+                if(data.success == false){
+                    alert(data.message);
+                }                      
+              });
+        return true;
+        
+    }
+        
+    </script>
+
+    </body>
+</html>
